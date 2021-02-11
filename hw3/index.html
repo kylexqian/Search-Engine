@@ -35,10 +35,147 @@
   // Obtain the root
   const rootElement = document.getElementById('root')
 
+  /* Struct of document:
+    SearchApp:
+      SearchBar:
+        search bar
+        date specifier
+        language specifier
+      SearchResults:
+        search results (from search bar)
+          highlight key words
+          load 10 initially
+
+  */
+
+  // inspired by post on campuswire https://campuswire.com/c/GAC40C30B/feed
+  // bold word provided by txt
+  function BoldQuery(props){
+    // words to bold
+    var words = props.words.split(" ").map(i => i.toLowerCase());
+    const text = props.txt.split(" ");
+
+    // return text
+    return text.map((item, key) => words.includes(text[key].toLowerCase()) ? <b> {item}</b> : <span> {item}</span>);
+  }
+
   class SearchApp extends React.Component {
+    constructor(props) {
+      super(props);
+      this.state = {
+        query : '',
+        searchResults : "",
+        count : 10,
+        en : false,
+        date : ""
+      }
+
+      // bindings
+      this.handleClick = this.handleClick.bind(this);
+      this.handleChange = this.handleChange.bind(this);
+      this.handleShowMore = this.handleShowMore.bind(this);
+      this.handleEnglishOnly = this.handleEnglishOnly.bind(this);
+      this.handleDateChange = this.handleDateChange.bind(this);
+    }
+
+    handleClick(event) {
+      // create query string
+      var query_string = ""
+
+      if (this.state.query.length > 0){
+        query_string += this.state.query
+      }
+      if (this.state.date){
+        query_string += "&date=" + this.state.date
+      }
+      if (this.state.en){
+        query_string += "&language=en"
+      }
+      if (this.state.count > 10){
+        query_string += "&count=" + this.state.count.toString()
+      }
+      console.log("query request: " + query_string)
+      fetch("https://ssa-hw2-backend.stevetarzia.com/api/search?query=" + query_string)
+        .then(response => response.json())
+        .then(resultObj => this.setState({searchResults: resultObj}))
+        .catch(() => this.setState({searchResults: ""}));
+    }
+
+    handleChange(event) {
+      // setState is asynch, need to use callback function to ensure everything is synchronized
+      // set query and also set count back to 10
+      this.setState({query : event.target.value, count : 10}, () => {this.handleClick(event)})
+    }
+
+    handleShowMore(event){
+      // change count and use handleClick as callback to refetch data
+      this.setState({count : this.state.count + 10}, () => {this.handleClick(event)})
+    }
+
+    handleEnglishOnly(event){
+      // change status of english articles only
+      this.setState({en : !this.state.en}, () => {this.handleClick(event)})
+    }
+
+    handleDateChange(event){
+      // only articles on certain date
+      this.setState({date : event.target.value}, () => {this.handleClick(event)})
+    }
+
     render() {
+      const flattenedResults = JSON.stringify(this.state.searchResults);
+      const querytext = this.state.query;
+
+      // get articles from JSON
+      const articles = this.state.searchResults["articles"];
+      // console.log("total number:" + this.state.searchResults["total_results"]);
+
+      // loop through articles and build search result
+      var results_array = [];
+      var i;
+      for (i in articles){
+        const article = articles[i];
+        const title = article["title"];
+        const url = article["url"];
+        const txt = article["txt"].substring(0,500); // substring shows just 500 chars (magic number)
+
+        var final = {"title":title, "url":url, "txt":txt}
+        results_array.push(final)
+      }
+
+      // maybe have something here to see if it's loading
       return (
-        <h1>Hello world!</h1>
+        <div id="searchApp">
+          <div id="searchBar">
+            <br />
+            <center>
+              <h1>News Search</h1>
+              <input type="text" placeholder="Search here..."  value={this.state.query} onChange={this.handleChange}/>
+              <br />
+              <br />
+                <form>
+                  <label style={{marginLeft: '.5rem'}}>English only: <input type="checkbox" onChange={this.handleEnglishOnly} style={{marginLeft: '.3rem'}}/></label>
+                  <label style={{marginLeft: '3.0rem'}}>Date: <input type="date" onChange={this.handleDateChange} style={{marginLeft: '.3rem'}}/></label>
+                </form>
+            </center>
+          </div>
+          <hr />
+          <div id="searchResults">
+            <ul className="list-unstyled">
+            {querytext.length > 0 &&
+              results_array.map((item, key)=>(
+              <li key={key}>
+                <ul>Title: <u>{item.title}</u></ul>
+                <ul>URL: <a href={item.url}>{item.url}</a></ul>
+                <ul>Text: <BoldQuery txt={item.txt} words={this.state.query}/></ul>
+                <br />
+              </li>
+            ))}
+            </ul>
+            {querytext.length > 0 && results_array.length != 0 && <input type="button" value="Show more results" onClick={this.handleShowMore} style={{marginLeft: '.5rem'}}/>}
+            <br />
+          </div>
+        </div>
       );
     }
   }
